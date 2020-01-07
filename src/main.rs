@@ -6,13 +6,55 @@ use tetra::input::{self, Key};
 use tetra::math::Vec2;
 use tetra::{Context, ContextBuilder, State};
 
+use specs::prelude::*;
+
 const FRAMES_PER_SECOND: f64 = 15.0;
 const SPRITE_SIZE: i32 = 20;
 const SCREEN_SIZE: i32 = 20;
 const INITIAL_TAIL: usize = 5;
 
-type Position = Vec2<i32>;
-type Direction = Vec2<i32>;
+pub struct Position {
+    pub x: i32,
+    pub y: i32,
+}
+
+impl Position {
+    pub fn new(x: i32, y: i32) -> Self {
+        Self { x, y }
+    }
+}
+
+impl Component for Position {
+    type Storage = VecStorage<Self>;
+}
+
+pub struct Direction {
+    pub x: i32,
+    pub y: i32,
+}
+
+impl Direction {
+    pub fn new(x: i32, y: i32) -> Self {
+        Self { x, y }
+    }
+}
+
+impl Component for Direction {
+    type Storage = VecStorage<Self>;
+}
+
+struct MovementSystem;
+
+impl<'a> System<'a> for MovementSystem {
+    type SystemData = (WriteStorage<'a, Position>, ReadStorage<'a, Direction>);
+
+    fn run(&mut self, (mut position, direction): Self::SystemData) {
+        for (position, direction) in (&mut position, &direction).join() {
+            position.x += direction.x;
+            position.y += direction.y;
+        }
+    }
+}
 
 struct Apple {
     position: Position,
@@ -57,7 +99,7 @@ impl Snake {
     fn new(ctx: &mut Context) -> tetra::Result<Self> {
         Ok(Self {
             position: Position::new(10, 10),
-            direction: Direction::zero(),
+            direction: Direction::new(0, 0),
             trail: VecDeque::new(),
             tail: INITIAL_TAIL,
             texture: Texture::new(ctx, "./resources/green.png")?,
@@ -67,7 +109,7 @@ impl Snake {
 
     fn check_collision(&self, position: Position) -> bool {
         for pos in &self.trail {
-            if *pos == position {
+            if pos.x == position.x && pos.y == position.y {
                 return true;
             }
         }
@@ -75,26 +117,26 @@ impl Snake {
     }
 
     fn update(&mut self, ctx: &mut Context) {
-        let mut position = Position::new(
-            (self.position.x + SCREEN_SIZE + self.direction.x) % SCREEN_SIZE,
-            (self.position.y + SCREEN_SIZE + self.direction.y) % SCREEN_SIZE,
-        );
-        if self.direction != Vec2::zero() && self.check_collision(position) {
-            self.die.play(ctx).unwrap();
-            self.tail = INITIAL_TAIL;
-            position.x = 10;
-            position.y = 10;
-            self.direction = Vec2::zero()
-        }
-        self.position = position;
+        // let mut position = Position::new(
+        //     (self.position.x + SCREEN_SIZE + self.direction.x) % SCREEN_SIZE,
+        //     (self.position.y + SCREEN_SIZE + self.direction.y) % SCREEN_SIZE,
+        // );
+        // if self.direction.x != 0 && self.direction.y != 0 && self.check_collision(position) {
+        //     self.die.play(ctx).unwrap();
+        //     self.tail = INITIAL_TAIL;
+        //     position.x = 10;
+        //     position.y = 10;
+        //     self.direction = Direction::new(0,0)
+        // }
+        // self.position = position;
 
-        self.trail.push_back(self.position);
-        loop {
-            if self.trail.len() <= self.tail {
-                break;
-            }
-            self.trail.pop_front();
-        }
+        // self.trail.push_back(self.position);
+        // loop {
+        //     if self.trail.len() <= self.tail {
+        //         break;
+        //     }
+        //     self.trail.pop_front();
+        // }
     }
 
     fn draw(&self, ctx: &mut Context) {
@@ -149,7 +191,7 @@ impl SnakeGame {
                 rand::thread_rng().gen_range(0, SCREEN_SIZE),
                 rand::thread_rng().gen_range(0, SCREEN_SIZE),
             );
-            if !self.snake.check_collision(position) {
+            if !self.snake.check_collision(Position::new(position.x, position.y)) {
                 self.apple.position = position;
                 break;
             }
@@ -163,7 +205,7 @@ impl State for SnakeGame {
 
         self.snake.update(ctx);
 
-        if self.snake.check_collision(self.apple.position) {
+        if self.snake.check_collision(Position::new(self.apple.position.x, self.apple.position.y)) {
             self.eat.play(ctx)?;
             self.snake.tail += 1;
             self.generate_apple();
