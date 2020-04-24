@@ -8,11 +8,13 @@ use tetra::{Context, ContextBuilder, State};
 
 const FRAMES_PER_SECOND: f64 = 15.0;
 const SPRITE_SIZE: i32 = 20;
-const SCREEN_SIZE: i32 = 20;
+const SCREEN_SIZE: i32 = 21;
 const INITIAL_TAIL: usize = 5;
 
 type Position = Vec2<i32>;
 type Direction = Vec2<i32>;
+
+const START_POSITION: Position = Position::new(10, 10);
 
 struct Apple {
     position: Position,
@@ -45,10 +47,8 @@ impl Apple {
 }
 
 struct Snake {
-    position: Position,
     direction: Direction,
     trail: VecDeque<Position>,
-    tail: usize,
     texture: Texture,
     die: Sound,
 }
@@ -56,10 +56,8 @@ struct Snake {
 impl Snake {
     fn new(ctx: &mut Context) -> tetra::Result<Self> {
         Ok(Self {
-            position: Position::new(10, 10),
             direction: Direction::zero(),
-            trail: VecDeque::new(),
-            tail: INITIAL_TAIL,
+            trail: vec![START_POSITION; INITIAL_TAIL].into_iter().collect(),
             texture: Texture::new(ctx, "./resources/green.png")?,
             die: Sound::new("./resources/splat.mp3")?,
         })
@@ -75,26 +73,20 @@ impl Snake {
     }
 
     fn update(&mut self, ctx: &mut Context) {
-        let mut position = Position::new(
-            (self.position.x + SCREEN_SIZE + self.direction.x) % SCREEN_SIZE,
-            (self.position.y + SCREEN_SIZE + self.direction.y) % SCREEN_SIZE,
+        let head = self.trail.back().unwrap();
+        let position = Position::new(
+            (head.x + SCREEN_SIZE + self.direction.x) % SCREEN_SIZE,
+            (head.y + SCREEN_SIZE + self.direction.y) % SCREEN_SIZE,
         );
         if self.direction != Vec2::zero() && self.check_collision(position) {
             self.die.play(ctx).unwrap();
-            self.tail = INITIAL_TAIL;
-            position.x = 10;
-            position.y = 10;
-            self.direction = Vec2::zero()
+            self.trail = vec![START_POSITION; INITIAL_TAIL].into_iter().collect();
+            self.direction = Vec2::zero();
+            return;
         }
-        self.position = position;
 
-        self.trail.push_back(self.position);
-        loop {
-            if self.trail.len() <= self.tail {
-                break;
-            }
-            self.trail.pop_front();
-        }
+        self.trail.push_back(position);
+        self.trail.pop_front();
     }
 
     fn draw(&self, ctx: &mut Context) {
@@ -165,7 +157,7 @@ impl State for SnakeGame {
 
         if self.snake.check_collision(self.apple.position) {
             self.eat.play(ctx)?;
-            self.snake.tail += 1;
+            self.snake.trail.push_front(*self.snake.trail.back().unwrap());
             self.generate_apple();
         }
 
@@ -182,7 +174,7 @@ impl State for SnakeGame {
     }
 }
 
-pub fn main() -> tetra::Result {
+fn main() -> tetra::Result {
     let width = (SPRITE_SIZE * SCREEN_SIZE) as i32;
     let height = (SPRITE_SIZE * SCREEN_SIZE) as i32;
 
